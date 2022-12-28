@@ -9,9 +9,9 @@ from funlord import settings
 
 
 def register_parameters(data):
-    if len(data) != 7:
+    if len(data) != 8:
         return False
-    if 'tel_no' not in data or 'name' not in data or 'surname' not in data or 'birthday' not in data or 'gender' not in data or 'password' not in data or 'password_a' not in data:
+    if 'tel_no' not in data or 'name' not in data or 'surname' not in data or 'birthday' not in data or 'gender' not in data or 'password' not in data or 'password_a' not in data or 'member_id' not in data:
         return False
     return True
 
@@ -28,6 +28,11 @@ def generate_sha256_for_user(data, now):
     string = str(data)+str(now)+"playland_created_by_yemre"
     hash = hashlib.sha256(f'{string}'.encode()).hexdigest()
     return hash[:8]
+
+def generate_sha256_for_transactionId(data, now):
+    string = str(data)+str(now)+"playland_created_by_yemre"
+    hash = hashlib.sha256(f'{string}'.encode()).hexdigest()
+    return hash[:12]
 
 
 def email_exist(data):

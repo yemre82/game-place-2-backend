@@ -1,3 +1,5 @@
+import requests
+import iyzipay
 import json
 from django.shortcuts import render
 from datetime import datetime, timedelta
@@ -7,9 +9,9 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.authtoken.models import Token
 from django.core.exceptions import ObjectDoesNotExist
 from funlord.responses import response_200, response_400
-from users.models import Balance, BalanceHistory, CardInfo, CustomUser, Family, Game, Jeton, Min_Withdrawal_Amount, OTPChange, OTPForgotPassword, OTPGetChild,OTPRegister
-from users.utils import generate_sha256, is_verified, register_parameters,generate_random_num,is_password_match,password_is_valid
-from superuser.models import Branchs, News,Company
+from users.models import Balance, BalanceHistory, CustomUser, Family, Game, Jeton, JetonConverisonHistory, JetonHistory, Min_Withdrawal_Amount, OTPChange, OTPForgotPassword, OTPGetChild,OTPRegister
+from users.utils import generate_sha256, generate_sha256_for_transactionId, generate_sha256_for_user, is_verified, register_parameters,generate_random_num,is_password_match,password_is_valid
+from superuser.models import Branchs, ChildOfGames, News,Company, addingBalanceCampaigns
 
 
 @api_view(['POST'])
@@ -54,6 +56,7 @@ def register(request):
     surname=request.data.get('surname')
     birthday = datetime.strptime(request.data.get("birthday"), "%Y-%m-%d")
     gender=request.data.get('gender')
+    member_id=request.data.get('member_id')
     try:
         user_obj=CustomUser.objects.get(tel_no=tel_no)
         return response_400('this user is already obtained')
@@ -73,7 +76,8 @@ def register(request):
             surname=surname,
             birthday=birthday,
             tel_no=tel_no,
-            gender=gender
+            gender=gender,
+            member_id=generate_sha256_for_user(tel_no,datetime.now())
         )
         return_obj.set_password(password)
         return_obj.save()
@@ -154,13 +158,13 @@ def forgot_password_verification(request):
         return response_400("there is no such otp")
     for i in otp_obj:
         if i.is_verified==True:
-            return response_400("This otp is verified already")
+            return response_400("This otp is verified already get")
         else:
             if i.otp!=otp:
                 return response_400("This otp is not true")
             else:
-                otp_obj.is_verified = True
-                otp_obj.save()
+                i.is_verified = True
+                i.save()
                 return response_200(None)
     
     
@@ -212,6 +216,8 @@ def get_all_news(request,filtering):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_news(request,news_id):
+    if not is_verified(request.user.tel_no):
+        return response_400('this user does not valid')
     try:
         otp_obj=OTPRegister.objects.get(tel_no=request.user.tel_no,is_verified=True)
     except ObjectDoesNotExist as e:
@@ -260,6 +266,8 @@ def get_all_branchs(request,filtering):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_branch(request,branch_id):
+    if not is_verified(request.user.tel_no):
+        return response_400('this user does not valid')
     try:
         otp_obj=OTPRegister.objects.get(tel_no=request.user.tel_no,is_verified=True)
     except ObjectDoesNotExist as e:
@@ -350,6 +358,8 @@ def get_balance_history(request,filter_type):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def get_or_create_jeton(request):
+    if not is_verified(request.user.tel_no):
+        return response_400('this user does not valid')
     try:
         jeton_obj=Jeton.objects.get(user=request.user)
     except ObjectDoesNotExist as e:
@@ -365,7 +375,28 @@ def get_or_create_jeton(request):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+def get_jeton_history(request,ended):
+    if not is_verified(request.user.tel_no):
+        return response_400('there is no such user')
+    jeton_obj=JetonHistory.objects.filter(user=request.user).order_by('created_at')[:ended]
+    history_list=[]
+    for i in jeton_obj:
+        return_obj={
+            'user': i.user.firstname+" "+i.user.lastname,
+            'jeton_amount':i.jeton_amount,
+            'is_added_jeton':i.is_added_jeton,
+            'created_at':i.created_at,
+            'updated_at':i.updated_at
+        }
+    history_list.append(jeton_obj)
+    return response_200(history_list)
+    
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def jeton_conversion(request):
+    if not is_verified(request.user.tel_no):
+        return response_400('this user does not valid')
     try:
         jeton_obj=Jeton.objects.get(user=request.user)
     except ObjectDoesNotExist as e:
@@ -390,6 +421,25 @@ def jeton_conversion(request):
     return response_200('success')
 
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def get_jeton_conversion_history(request,ended):
+    if not is_verified(request.user.tel_no):
+        return response_400('this user does not valid')
+    jeton_obj=JetonConverisonHistory.objects.filter(user=request.user).order_by('-created_at')[:ended]
+    history_obj=[]
+    for i in jeton_obj:
+        return_obj={
+            "user": i.user.firstname+" "+i.user.lastname,
+            "amount":i.amount,
+            "conversion_jeton":i.is_conversion_jeton,
+            "created_at":i.created_at,
+            "updated_at":i.updated_at
+        }
+    history_obj.append(return_obj)
+    return response_200(history_obj)
+
+    
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def get_profile(request):
@@ -505,10 +555,11 @@ def edit_member_from_family(request):
     return response_200("success",None)
 
 
-
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def change_name_surname(request):
+    if not is_verified(request.user.tel_no):
+        return response_400('this user does not valid')
     firstname=request.data.get("firstname")
     lastname=request.data.get("lastname")
     if len(firstname)==0:
@@ -531,6 +582,8 @@ def change_name_surname(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def change_birthday(request):
+    if not is_verified(request.user.tel_no):
+        return response_400('this user does not valid')
     birthday = datetime.strptime(request.data.get("birthday"), "%Y-%m-%d")
     try:
         family_obj=Family.objects.get(
@@ -552,6 +605,8 @@ def change_birthday(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def change_phone(request):
+    if not is_verified(request.user.tel_no):
+        return response_400('this user does not valid')
     phone=request.data.get("phone")
     otp = generate_random_num()
     #sms gönderilecek
@@ -568,6 +623,8 @@ def change_phone(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def change_phone_verification(request):
+    if not is_verified(request.user.tel_no):
+        return response_400('this user does not valid')
     change_phone_obj=OTPChange.objects.filter(user=request.user,is_verified=False).order_by("-id")
     otp=request.data.get("otp")
     if len(change_phone)==0:
@@ -600,7 +657,9 @@ def change_phone_verification(request):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def change_password(request):
+def change_password_in_application(request):
+    if not is_verified(request.user.tel_no):
+        return response_400('this user does not valid')
     old_password=request.data.get("old_password")
     if not request.user.check_password(old_password):
         return response_400("your old password is wrong")
@@ -618,6 +677,8 @@ def change_password(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_child_in_game(request):
+    if not is_verified(request.user.tel_no):
+        return response_400('this user does not valid')
     this_time=datetime.now()
     game_obj=Game.objects.filter(user=request.user,is_finished=False).order_by("-id")
     returning_list=[]
@@ -648,6 +709,8 @@ def get_child_in_game(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def get_child_from_game(request):
+    if not is_verified(request.user.tel_no):
+        return response_400('this user does not valid')
     this_time=datetime.now()
     game_obj=Game.objects.filter(user=request.user,started_at__gl=this_time,ended_at__gt=this_time).order_by("-id")
     if len(game_obj)==0:
@@ -671,6 +734,8 @@ def get_child_from_game(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def extend_child_in_game(request):
+    if not is_verified(request.user.tel_no):
+        return response_400('this user does not valid')
     this_time=datetime.now()
     game_obj=Game.objects.filter(user=request.user,started_at__lt=this_time,ended_at__gt=this_time,is_finished=False).order_by("-id")
     if len(game_obj)==0:
@@ -705,6 +770,8 @@ def extend_child_in_game(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def is_email_valid(request):
+    if not is_verified(request.user.tel_no):
+        return response_400('this user does not valid')
     if request.user.email=="" or request.user.email==None:
         return response_400("email girilmemiş")
     return response_200("success",str(request.user.email))
@@ -713,10 +780,349 @@ def is_email_valid(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def add_or_edit_email(request):
+    if not is_verified(request.user.tel_no):
+        return response_400('this user does not valid')
     email=request.data.get("email")
     request.user.email=email
     request.user.save()
     return response_200("success",None)
 
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def iyzipay(request):
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0]
+    else:
+        ip = request.META.get('REMOTE_ADDR')
+    options = {
+        'api_key': 'aYIyCJsmt8ZuG6fyN4toZed2fqtRiqln',
+        'secret_key': 'VJwmEm8S0DfUUGprn4zlsm6Nq4S9LNdi',
+        'base_url': "api.iyzipay.com"
+    }
+    cardNumber=request.data.get('cardNumber')
+    expireMonth=request.data.get('expireMonth')
+    expireYear=request.data.get('expireYear')
+    cvc=request.data.get('cvc')
+    price=request.data.get('price')
+    payment_card = {
+        'cardHolderName':request.user.name+' '+ request.user.surname,
+        'cardNumber': cardNumber,
+        'expireMonth': expireMonth,
+        'expireYear': expireYear,
+        'cvc':cvc ,
+        'registerCard': '0'
+    }
+
+    buyer = {
+        'id': request.user.id,
+        'name': request.user.name,
+        'surname': request.user.surname,
+        'gsmNumber': request.user.tel_no,
+        'email': request.user.email,
+        'identityNumber': '11111111111',
+        'lastLoginDate': str(datetime.now()),
+        'registrationDate': str(datetime.now()),
+        'registrationAddress': 'Istanbul',
+        'ip': ip,
+        'city': 'Istanbul',
+        'country': 'Turkey',
+        'zipCode': '34000'
+    }
+
+    address = {
+        'contactName': request.user.name+ ' '+ request.user.surname,
+        'city': 'Istanbul',
+        'country': 'Turkey',
+        'address': 'Istanbul',
+        'zipCode': '34000'
+    }
+    campaigns_obj=addingBalanceCampaigns.objects.filter(is_active=True).order_by('-amount_money')
+    if len(campaigns_obj)==0:
+        basket_items = [
+        {
+            "id": "bakiye"+str(price),
+            "price": str(price),
+            "name": "bakiye"+str(price),
+            "category1": "bakiye",
+            "itemType": "VIRTUAL"
+        }
+        ]
+    for i in campaigns_obj:
+        if i.amount_money <= price:
+            if i.is_have_discount:
+                basket_items = [
+                {
+                    "id": "bakiye"+str(price*i.discount_percentage),
+                    "price": str(price*i.discount_percentage),
+                    "name": "bakiye"+str(price*i.discount_percentage),
+                    "category1": "bakiye",
+                    "itemType": "VIRTUAL"
+                }
+                ]
+            else:
+                basket_items = [
+                {
+                    "id": "bakiye"+str(price),
+                    "price": str(price),
+                    "name": "bakiye"+str(price),
+                    "category1": "bakiye",
+                    "itemType": "VIRTUAL"
+                }
+                ]
+                break
+            break
+        break
+
+    request = {
+        'locale': 'tr',
+        'conversationId':"bakiye"+str(price), 
+        'price': str(price),
+        'paidPrice': str(price),
+        'currency': 'TRY',
+        'installment': '1',
+        'basketId': "bakiye"+str(price),
+        'paymentChannel': 'WEB',
+        'paymentGroup': 'OTHER',
+        'paymentCard': payment_card,
+        'buyer': buyer,
+        'shippingAddress': address,
+        'billingAddress': address,
+        'basketItems': basket_items
+    }
+    payment = iyzipay.Payment().create(request, options)
+    payment_json=json.loads(payment.read())
+    if payment_json["status"]=='success':
+        BalanceHistory.objects.create(
+            user=request.user,
+            is_gift=False,
+            is_adding_balance=True,
+            balance=price,
+        )
+        try:
+            balance_obj=Balance.objects.get(user=request.user)
+        except ObjectDoesNotExist as e:
+            return response_400('this usern does not added price')
+        balance_obj.price += price
+        balance_obj.save()
+        campaigns_obj=addingBalanceCampaigns.objects.filter(is_active=True).order_by('-amount_money')
+        if len(campaigns_obj)==0:
+            return response_200(None)
+        for i in campaigns_obj:
+            if i.amount_money <= price:
+                if i.is_have_discount==False:
+                    balance_obj.price += i.gift_price
+                    balance_obj.save()
+                    BalanceHistory.objects.create(
+                        user=request.user,
+                        is_gift=True,
+                        is_adding_balance=True,
+                        balance=i.gift_price,
+                    )
+                    return response_200(None)
+    return response_400(payment_json["status"])
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def game_info(request,qr_code):
+    if not is_verified(request.user.tel_no):
+        return response_400('there is no such user')
+    data={
+        'machineCode':str(qr_code),
+        'memberId':request.user.member_id,
+        'transactionId':generate_sha256_for_transactionId(request.user.tel_no,datetime.now()),
+    }
+    headers = {"Content-Type": "application/json; charset=utf-8"}
+    response = requests.post('https://api.playland.sade.io/Device/GetPrice', headers=headers, json=data)
+    response_obj=response.json()
+    try:
+        balance_obj=Balance.objects.get(user=request.user)
+    except ObjectDoesNotExist as e:
+        balance_obj=Balance.objects.create(
+            user=request.user
+        )
+    if response_obj["status"]==False:
+        return response_400("the machine has an error")
+    for_child=False
+    is_money_enough=True
+    if response_obj["machineType"]=="SOFT PLAY2":
+        for_child=True
+    if balance_obj.balance<response_obj["price"]:
+        is_money_enough=False
+    if response_obj["price"]==0:
+        return response_400("this machine for personels")
+    
+    return_obj={
+        "machine_type":response_obj["machineType"],
+        "machine_name":response_obj["machineName"],
+        "price":response_obj["price"],
+        "for_child":for_child,
+        "is_money_enough":is_money_enough,
+        "your_price":balance_obj.balance,
+        "machine_store": response_obj["machineStore"]
+    }
+    return response_200(return_obj)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def play_game(request,qr_code):
+    if not is_verified(request.user.tel_no):
+        return response_400('there is no such user')
+    try:
+        jeton_obj=Jeton.objects.get(user=request.user)
+    except ObjectDoesNotExist as e:
+        jeton_obj=Jeton.objects.create(
+            user=request.user
+        )
+    try:
+        min_withdrawal_amount_obj=Min_Withdrawal_Amount.objects.get(id=1)
+    except ObjectDoesNotExist as e:
+        return response_400('min withdrawal amount does not get')
+    data={
+        'machineCode':str(qr_code),
+        'memberId':request.user.member_id,
+        'transactionId':generate_sha256_for_transactionId(request.user.tel_no,datetime.now()),
+    }
+    headers = {"Content-Type": "application/json; charset=utf-8"}
+    response = requests.post('https://api.playland.sade.io/Device/GetPrice', headers=headers, json=data)
+    response_obj=response.json()
+    if response_obj["status"] == False:
+        return response_400('this machine has an error')
+    try:
+        balance_obj=Balance.objects.get(user=request.user)
+    except ObjectDoesNotExist as e:
+        return response_400('this user has not any balance')
+    if balance_obj.price < response_obj["price"]:
+        return response_400('your balance is not enough')
+    if response_obj["machineType"] == "SOFT PLAY":
+        family_id=request.data.get('family_id')
+        try:
+            family_obj=Family.objects.get(parent=request.user,id=family_id,is_parent=False)
+        except ObjectDoesNotExist as e:
+            return response_400('this is not child')
+        now=datetime.timestamp(datetime.now())
+        child_timestamp=datetime.timestamp(family_obj.birthday)
+        if now - child_timestamp > 378432000:
+            return response_400("this child can't play this game")
+        price=balance_obj.price
+        if price >= 500:
+            price=499
+        data={
+            "machineCode":str(qr_code),
+            "memberId":request.user.member_id,
+            "transactionId":generate_sha256_for_transactionId(request.user.tel_no,datetime.now()),
+            "memberBalance": price
+        }
+        response = requests.post('https://api.playland.sade.io/Device/StartGame', headers=headers, json=data)
+        response_obj2=response.json()
+        if "20 dk" in response_obj["machineName"]:
+            adding_time=1200
+        elif "30 dk" in response_obj["machineName"]:
+            adding_time=1800
+        elif "45 dk" in response_obj["machineName"]:
+            adding_time=2700
+        elif "60 dk" in response_obj["machineName"]:
+            adding_time=3600
+        elif "90 dk" in response_obj["machineName"]:
+            adding_time=5400
+        elif "120 dk" in response_obj["machineName"]:
+            adding_time=7200
+        else:
+            return response_400("I don't get time of machine")
+
+        if response_obj2["status"] == True:
+            Game.objects.create(
+                user=request.user,
+                gamer=family_obj,
+                price=response_obj["price"],
+                started_at=datetime.fromtimestamp(now),
+                ended_at=datetime.fromtimestamp(now+adding_time),
+                branch=response_obj["machineStore"],
+                game_name=response_obj["machineName"],
+                company=response_obj["company"]
+            )
+            BalanceHistory.objects.create(
+                user=request.user,
+                balance=response_obj["price"],
+                company=response_obj["company"],
+                branch=response_obj["machineStore"],
+                game_name=response_obj["machineName"]
+            )
+            ChildOfGames.objects.create(
+                parent_name=request.user.name,
+                parent_surname=request.user.surname,
+                tel_no=request.user.tel_no,
+                child_name=family_obj.firstname,
+                child_surname=family_obj.lastname,
+                price=response_obj["price"],
+                started_at=datetime.fromtimestamp(now),
+                ended_at=datetime.fromtimestamp(now+adding_time),
+                branch=response_obj["machineStore"],
+                game_name=response_obj["machineName"],
+                company=response_obj["company"]
+            )
+            jeton_obj.amount += response_obj["price"] * min_withdrawal_amount_obj.percantage
+            jeton_obj.save()
+            JetonHistory.objects.create(
+                user=request.user,
+                jeton_amount=response_obj["price"] * min_withdrawal_amount_obj.percantage,
+                is_added_jeton=True
+            )
+            return response_200(None)
+        else:
+            return response_400('this machine has an error')
+    else:
+        data={
+            "machineCode":str(qr_code),
+            "memberId":request.user.member_id,
+            "transactionId":generate_sha256_for_transactionId(request.user.tel_no,datetime.now()),
+            "memberBalance": price
+        }
+        response = requests.post('https://api.playland.sade.io/Device/StartGame', headers=headers, json=data)
+        response_obj3=response.json()
+        if response_obj3["status"] == True:
+            Game.objects.create(
+                user=request.user,
+                gamer=family_obj,
+                price=response_obj["price"],
+                started_at=datetime.fromtimestamp(now),
+                ended_at=None,
+                branch=response_obj["machineStore"],
+                game_name=response_obj["machineName"],
+                company=response_obj["company"]
+            )
+            BalanceHistory.objects.create(
+                user=request.user,
+                balance=response_obj["price"],
+                company=response_obj["company"],
+                branch=response_obj["machineStore"],
+                game_name=response_obj["machineName"]
+            )
+            ChildOfGames.objects.create(
+                parent_name=request.user.name,
+                parent_surname=request.user.surname,
+                tel_no=request.user.tel_no,
+                child_name=family_obj.firstname,
+                child_surname=family_obj.lastname,
+                price=response_obj["price"],
+                started_at=datetime.fromtimestamp(now),
+                ended_at=None,
+                branch=response_obj["machineStore"],
+                game_name=response_obj["machineName"],
+                company=response_obj["company"]
+            )
+            jeton_obj.amount += response_obj["price"] * min_withdrawal_amount_obj.percantage
+            jeton_obj.save()
+            JetonHistory.objects.create(
+                user=request.user,
+                jeton_amount=response_obj["price"] * min_withdrawal_amount_obj.percantage,
+                is_added_jeton=True
+            )
+            return response_200(None)
+        else:
+            return response_400('this machine has an error')
+    
 

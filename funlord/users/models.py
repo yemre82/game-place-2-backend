@@ -1,6 +1,5 @@
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
-# Create your models here.
 
 class MyUserManager(BaseUserManager):
     def create_user(self,username, tel_no, password=None):
@@ -129,6 +128,27 @@ class Jeton(models.Model):
     def __str__(self):
         return str(self.user)
 
+class JetonHistory(models.Model):
+    user=models.ForeignKey(Jeton,on_delete=models.CASCADE)
+    jeton_amount=models.FloatField(blank=False)
+    is_added_jeton=models.BooleanField(default=False)
+    created_at=models.DateTimeField(auto_now_add=True)
+    updated_at=models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return str(self.user)
+
+class JetonConverisonHistory(models.Model):
+    user=models.ForeignKey(Jeton,on_delete=models.CASCADE)
+    amount=models.FloatField(blank=False)
+    is_conversion_jeton=models.BooleanField(default=False)
+    created_at=models.DateTimeField(auto_now_add=True)
+    updated_at=models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return str(self.user)
+
+
 class Min_Withdrawal_Amount(models.Model):
     min_amount=models.FloatField(default=0,blank=False)
     percantage=models.FloatField(default=0,blank=False)
@@ -138,7 +158,6 @@ class Min_Withdrawal_Amount(models.Model):
 
     def __str__(self):
         return str(self.min_amount)
-
 
 
 def get_profile_image_filepath(self, filename):
@@ -173,6 +192,7 @@ class Game(models.Model):
     started_at=models.DateTimeField(blank=False)
     ended_at=models.DateTimeField(blank=True,null=True)
     is_finished=models.BooleanField(default=False)
+    company=models.CharField(blank=False,max_length=100)
     city=models.CharField(blank=True,max_length=100,null=True)
     branch=models.CharField(blank=True,max_length=100,null=True)
     game_name=models.CharField(blank=True,null=True,max_length=100)
@@ -194,3 +214,5 @@ class OTPGetChild(models.Model):
 
     def __str__(self):
         return str(self.phone)
+
+

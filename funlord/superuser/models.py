@@ -51,3 +51,39 @@ class Branchs(models.Model):
 
     def __str__(self):
         return self.city
+
+
+class addingBalanceCampaigns(models.Model):
+    name=models.CharField(blank=False,max_length=100)
+    amount_money=models.FloatField(blank=False)
+    is_active=models.BooleanField(default=False)
+    gift_price=models.FloatField(default=0)
+    is_have_discount=models.BooleanField(default=False)
+    discount_percentage=models.FloatField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    update_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return str(self.name)
+
+class ChildOfGames(models.Model):
+    parent_name=models.CharField(blank=False,max_length=100)
+    parent_surname=models.CharField(blank=False,max_length=100)
+    tel_no=models.CharField(blank=False,max_length=100)
+    child_name=models.CharField(blank=False,max_length=100)
+    child_surname=models.CharField(blank=False,max_length=100)
+    price=models.FloatField(default=0,blank=False)
+    started_at=models.DateTimeField(blank=False)
+    ended_at=models.DateTimeField(blank=True,null=True)
+    is_finished=models.BooleanField(default=False)
+    is_send_email=models.BooleanField(default=False)
+    company=models.CharField(blank=False,max_length=100)
+    city=models.CharField(blank=True,max_length=100,null=True)
+    branch=models.CharField(blank=True,max_length=100,null=True)
+    game_name=models.CharField(blank=True,null=True,max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+    update_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return str(self.tel_no)
+
