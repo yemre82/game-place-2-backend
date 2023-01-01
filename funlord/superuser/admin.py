@@ -1,5 +1,6 @@
 from django.contrib import admin
-from superuser.models import Branchs, Company, News
+from superuser.models import Branchs, Company, News, addingBalanceCampaigns
+from users.models import JetonHistory
 
 
 class NewsAdmin(admin.ModelAdmin):
@@ -37,3 +38,29 @@ class BranchsAdmin(admin.ModelAdmin):
 
 
 admin.site.register(Branchs, BranchsAdmin)
+
+
+
+class addingBalanceCampaignsAdmin(admin.ModelAdmin):
+    list_display = ('id','name','amount_money','is_active','gift_price','is_have_discount','discount_percentage','created_at','update_at')
+    search_fields = ('id','name','amount_money','gift_price','discount_percentage')
+
+    filter_horizontal = ()
+    list_filter = ()
+    fieldsets = ()
+
+
+admin.site.register(addingBalanceCampaigns, addingBalanceCampaignsAdmin)
+
+
+
+class JetonHistoryAdmin(admin.ModelAdmin):
+    list_display = ('id','user','jeton_amount','is_added_jeton','created_at','updated_at')
+    search_fields = ('id','user','jeton_amount','is_added_jeton')
+
+    filter_horizontal = ()
+    list_filter = ()
+    fieldsets = ()
+
+
+admin.site.register(JetonHistory, JetonHistoryAdmin)

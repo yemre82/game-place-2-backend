@@ -1,5 +1,5 @@
 from django.urls import path
-from users.views import add_balance, game_info, get_all_branchs, get_all_news, get_balance, get_balance_history, get_branch,get_news, get_or_create_jeton, jeton_conversion,create_otp,register,login,forgot_password,forgot_password_verification,change_password, verify_otp
+from users.views import game_info, get_all_branchs, get_all_news, get_balance, get_balance_history, get_branch, get_jeton_history,get_news, get_or_create_jeton, jeton_conversion,create_otp,register,login,forgot_password,forgot_password_verification,change_password, verify_otp
 
 urlpatterns= [
     path("create-otp",create_otp),
@@ -14,9 +14,9 @@ urlpatterns= [
     path('get-all-branchs/<str:filtering>',get_all_branchs),
     path('get-branch/<int:branch_id>',get_branch),
     path('get-balance',get_balance),
-    path('add-balance',add_balance),
     path('get-balance-history/<str:filter_type>',get_balance_history),
     path('get-or-create-jeton',get_or_create_jeton),
+    path('get-jeton-history/<int:ended>',get_jeton_history),
     path('jeton-conversion',jeton_conversion),
     path('game-info/<str:qr_code>',game_info)
 ]

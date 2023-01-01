@@ -1,3 +1,4 @@
+from django.utils.timezone import localtime
 import requests
 import iyzipay
 import json
@@ -9,8 +10,8 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.authtoken.models import Token
 from django.core.exceptions import ObjectDoesNotExist
 from funlord.responses import response_200, response_400
-from users.models import Balance, BalanceHistory, CustomUser, Family, Game, Jeton, JetonConverisonHistory, JetonHistory, Min_Withdrawal_Amount, OTPChange, OTPForgotPassword, OTPGetChild,OTPRegister
-from users.utils import generate_sha256, generate_sha256_for_transactionId, generate_sha256_for_user, is_verified, register_parameters,generate_random_num,is_password_match,password_is_valid
+from users.models import Balance, BalanceHistory, CustomUser, Family, Game, Gift, GiftDetails, Jeton, JetonConverisonHistory, JetonHistory, Min_Withdrawal_Amount, OTPChange, OTPForgotPassword, OTPGetChild,OTPRegister
+from users.utils import generate_sha256, generate_sha256_for_transactionId, generate_sha256_for_user, is_verified, register_parameters,generate_random_num,is_password_match,password_is_valid, sendSMSVerification
 from superuser.models import Branchs, ChildOfGames, News,Company, addingBalanceCampaigns
 
 
@@ -24,7 +25,7 @@ def create_otp(request):
         return response_400("The user is already obtained")
     except ObjectDoesNotExist as e:
         otp = generate_random_num()
-        #burada sms gönderilecek
+        sendSMSVerification(otp,[tel_no])
         OTPRegister.objects.create(
             tel_no=tel_no,
             otp=otp,
@@ -121,7 +122,6 @@ def login(request):
         "qr_code": user_obj.qr_code,
         "name": user_obj.name,
         "surname":user_obj.surname,
-
     }
     return response_200(return_obj)
 
@@ -135,7 +135,7 @@ def forgot_password(request):
     except ObjectDoesNotExist as e:
         return response_400('there is no such email')
     otp = generate_random_num()
-    #burada sms gönderilecek
+    sendSMSVerification(otp,[tel_no])
     OTPForgotPassword.objects.create(
         user=user_obj,
         otp=otp,
@@ -207,7 +207,7 @@ def get_all_news(request,filtering):
             "image": "/media/"+str(news.image),
             "is_campaign":news.is_campaign,
             "price":news.price,
-            "created_at":news.created_at
+            "created_at":localtime(news.created_at)
         }
         liste.append(return_obj)
     return response_200(liste)
@@ -225,7 +225,7 @@ def get_news(request,news_id):
     try:
         news_obj=News.objects.get(id=news_id)
     except ObjectDoesNotExist as e:
-        return response_400('there no such news')
+        return response_400('there is no such news')
     return_obj={
         "id":news_obj.id,
         "company":news_obj.company.name,
@@ -235,7 +235,7 @@ def get_news(request,news_id):
         "image": "/media/"+str(news_obj.image),
         "is_campaign":news_obj.is_campaign,
         "price":news_obj.price,
-        "created_at":news_obj.created_at
+        "created_at":localtime(news_obj.created_at)
     }
     return response_200(return_obj)
 
@@ -283,7 +283,7 @@ def get_branch(request,branch_id):
         "city":branch_obj.city,
         "country":branch_obj.country,
         "maps_link":branch_obj.maps_link,
-        "created_at":branch_obj.created_at
+        "created_at":localtime(branch_obj.created_at)
     }
     return response_200(return_obj)
 
@@ -293,33 +293,92 @@ def get_branch(request,branch_id):
 def get_balance(request):
     if not is_verified(request.user.tel_no):
         return response_400('there is no such user')
+    try:
+        balance_obj=Balance.objects.get(user=request.user)
+    except ObjectDoesNotExist as e:
+        return response_400('this user has not any balance')
     return_obj={
-        "balance":request.user.budget
+        "balance":balance_obj.price
     }
     return response_200(return_obj)
 
 
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def add_balance(request):
-    if not is_verified(request.user.tel_no):
-        return response_400('there is no such user')
-    adding_balance=request.data.get('adding_balance')
-    if int(adding_balance) <= 0:
-        return response_400("you don't load negative amount")
-    now = request.data.get("datetime")
-    sha256_proof = request.data.get("sha256_proof")
-    if sha256_proof != generate_sha256(adding_balance,now):
-        return response_400("sha256 proof is not match")
-    #iyizipay buraya gelecek.
-    BalanceHistory.objects.create(
-        user=request.user,
-        balance=adding_balance,
-        is_adding_balance=True
-    )
-    request.user.balance += adding_balance
-    request.user.save()
-    return response_200('success')
+# @api_view(['POST'])
+# @permission_classes([IsAuthenticated])
+# def add_balance(request):
+#     price=request.data.get('price')
+#     campaigns_obj=addingBalanceCampaigns.objects.filter(is_active=True,is_have_discount=True).order_by('-amount_money')
+#     if len(campaigns_obj)==0:
+#         return response_200('burada indirim yoktur')
+#     else:
+#         liste=[]
+#         for i in campaigns_obj:
+#             if price >= i.amount_money:
+#                 return_obj={
+#                     "discount_percentage":i.discount_percentage,
+#                     "name":i.name
+#                 }
+#                 liste.append(return_obj)
+#         return response_200(liste)
+#     for i in campaigns_obj:
+#         if i.amount_money <= price:
+#             if i.is_have_discount:
+#                 basket_items = [
+#                 {
+#                     "id": "bakiye"+str(price*i.discount_percentage),
+#                     "price": str(price*i.discount_percentage),
+#                     "name": "bakiye"+str(price*i.discount_percentage),
+#                     "category1": "bakiye",
+#                     "itemType": "VIRTUAL"
+#                 }
+#                 ]
+#             else:
+#                 basket_items = [
+#                 {
+#                     "id": "bakiye"+str(price),
+#                     "price": str(price),
+#                     "name": "bakiye"+str(price),
+#                     "category1": "bakiye",
+#                     "itemType": "VIRTUAL"
+#                 }
+#                 ]
+#                 break
+#             break
+#         break
+
+    #if payment_json["status"]=='success':
+#         BalanceHistory.objects.create(
+#             user=request.user,
+#             is_gift=False,
+#             is_adding_balance=True,
+#             balance=price,
+#         )
+#         try:
+#             balance_obj=Balance.objects.get(user=request.user)
+#         except ObjectDoesNotExist as e:
+#             return response_400('this usern does not added price')
+#         balance_obj.price += price
+#         balance_obj.save()
+#         campaigns_obj=addingBalanceCampaigns.objects.filter(is_active=True).order_by('-amount_money')
+#         if len(campaigns_obj)==0:
+#             return response_200(None)
+#         for i in campaigns_obj:
+#             if i.amount_money <= price:
+#                 if i.is_have_discount==False:
+#                     balance_obj.price += i.gift_price
+#                     balance_obj.save()
+#                     BalanceHistory.objects.create(
+#                         user=request.user,
+#                         is_gift=True,
+#                         is_adding_balance=True,
+#                         balance=i.gift_price,
+#                     )
+#                     return response_200(None)
+#     return response_400(payment_json["status"])
+
+
+
+#     return response_200('success')
 
 
 @api_view(['GET'])
@@ -340,7 +399,7 @@ def get_balance_history(request,filter_type):
     history_list = []
     for i in history_obj:
         return_obj = {
-            "user": i.user.firstname+" "+i.user.lastname,
+            "user": i.user.name+" "+i.user.surname,
             "history": i.balance,
             "is_gift":i.is_gift,
             "is_adding_balance": i.is_adding_balance,
@@ -348,8 +407,8 @@ def get_balance_history(request,filter_type):
             "city": i.city,
             "branch": i.branch,
             "game_name": i.game_name,
-            "created_at": i.created_at,
-            "updated_at": i.updated_at
+            "created_at": localtime(i.created_at),
+            "updated_at": localtime(i.updated_at)
         }
         history_list.append(return_obj)
     return response_200(history_list)
@@ -373,22 +432,22 @@ def get_or_create_jeton(request):
     return response_200(return_obj)
 
 
-@api_view(['POST'])
+@api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_jeton_history(request,ended):
     if not is_verified(request.user.tel_no):
         return response_400('there is no such user')
-    jeton_obj=JetonHistory.objects.filter(user=request.user).order_by('created_at')[:ended]
+    jeton_obj=JetonHistory.objects.filter(user=request.user).order_by('-created_at')[:ended]
     history_list=[]
     for i in jeton_obj:
         return_obj={
-            'user': i.user.firstname+" "+i.user.lastname,
+            'user': i.user.name+" "+i.user.surname,
             'jeton_amount':i.jeton_amount,
             'is_added_jeton':i.is_added_jeton,
-            'created_at':i.created_at,
-            'updated_at':i.updated_at
+            'created_at':localtime(i.created_at),
+            'updated_at':localtime(i.updated_at)
         }
-    history_list.append(jeton_obj)
+        history_list.append(return_obj)
     return response_200(history_list)
     
 
@@ -416,7 +475,7 @@ def jeton_conversion(request):
         balance_obj=Balance.objects.get(user=request.user)
     except ObjectDoesNotExist as e:
         balance_obj=Balance.objects.create(user=request.user)
-    balance_obj.price += (float(amount)/amount_obj.tl_to_jeton)
+    balance_obj.price += float((amount)/amount_obj.tl_to_jeton)
     balance_obj.price.save()
     return response_200('success')
 
@@ -433,13 +492,13 @@ def get_jeton_conversion_history(request,ended):
             "user": i.user.firstname+" "+i.user.lastname,
             "amount":i.amount,
             "conversion_jeton":i.is_conversion_jeton,
-            "created_at":i.created_at,
-            "updated_at":i.updated_at
+            "created_at":localtime(i.created_at),
+            "updated_at":localtime(i.updated_at)
         }
     history_obj.append(return_obj)
     return response_200(history_obj)
 
-    
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def get_profile(request):
@@ -447,7 +506,10 @@ def get_profile(request):
         return response_400('there is no such user')
     return_obj={
         "name":request.user.name,
-        "surname":request.user.surname
+        "surname":request.user.surname,
+        "birthday":request.user.birthday,
+        "tel_no":request.user.tel_no,
+        "gender":request.user.gender
     }
     return response_200(return_obj)
 
@@ -607,13 +669,13 @@ def change_birthday(request):
 def change_phone(request):
     if not is_verified(request.user.tel_no):
         return response_400('this user does not valid')
-    phone=request.data.get("phone")
+    tel_no=request.data.get("phone")
     otp = generate_random_num()
-    #sms gönderilecek
+    sendSMSVerification(otp,[tel_no])
     description = "verification"
     OTPChange.objects.create(
         user=request.user,
-        phone=phone,
+        phone=tel_no,
         otp=otp,
         description=description
     )
@@ -692,10 +754,10 @@ def get_child_in_game(request):
             "gamer":i.gamer.firstname+ " "+ i.gamer.lastname,
             "gamer_id":i.gamer.id,
             "price":one_ticket_price,
-            "started_at":i.started_at,
-            "ended_at":i.ended_at,
-            "created_at":i.created_at,
-            "update_at":i.update_at,
+            "started_at":localtime(i.started_at),
+            "ended_at":localtime(i.ended_at),
+            "created_at":localtime(i.created_at),
+            "update_at":localtime(i.update_at),
             "remaining_time":remaining_time_ts,
             "city":i.city,
             "branch":i.branch,
@@ -742,7 +804,7 @@ def extend_child_in_game(request):
         return response_400("the user has no child in game")
     game_id=request.data.get("game_id")
     try:
-        game_obj=Game.objects.get(user=request.user,started_at__lt=this_time,ended_at__gt=this_time,id=game_id,is_finished=False)
+        game_obj=ChildOfGames.objects.get(user=request.user,started_at__lt=this_time,ended_at__gt=this_time,id=game_id,is_finished=False)
     except ObjectDoesNotExist as e:
         return response_400("there is no such game")
     how_much_ticket_played=(datetime.timestamp(game_obj.ended_at)-datetime.timestamp(game_obj.started_at))/1800
@@ -797,8 +859,8 @@ def iyzipay(request):
     else:
         ip = request.META.get('REMOTE_ADDR')
     options = {
-        'api_key': 'aYIyCJsmt8ZuG6fyN4toZed2fqtRiqln',
-        'secret_key': 'VJwmEm8S0DfUUGprn4zlsm6Nq4S9LNdi',
+        'api_key': 'OdaEJF6EjJrapo7jlmkYeQlsC22OrLdW',
+        'secret_key': 'tPVrpRL2YbKDZu6mijylSwasSJIwhqrW',
         'base_url': "api.iyzipay.com"
     }
     cardNumber=request.data.get('cardNumber')
@@ -838,7 +900,16 @@ def iyzipay(request):
         'address': 'Istanbul',
         'zipCode': '34000'
     }
-    campaigns_obj=addingBalanceCampaigns.objects.filter(is_active=True).order_by('-amount_money')
+    basket_items = [
+        {
+            "id": "bakiye"+str(price),
+            "price": str(price),
+            "name": "bakiye"+str(price),
+            "category1": "bakiye",
+            "itemType": "VIRTUAL"
+        }
+        ]
+    campaigns_obj=addingBalanceCampaigns.objects.filter(is_active=True,is_have_discount=True).order_by('-amount_money')
     if len(campaigns_obj)==0:
         basket_items = [
         {
@@ -851,29 +922,18 @@ def iyzipay(request):
         ]
     for i in campaigns_obj:
         if i.amount_money <= price:
-            if i.is_have_discount:
-                basket_items = [
-                {
-                    "id": "bakiye"+str(price*i.discount_percentage),
-                    "price": str(price*i.discount_percentage),
-                    "name": "bakiye"+str(price*i.discount_percentage),
-                    "category1": "bakiye",
-                    "itemType": "VIRTUAL"
-                }
-                ]
-            else:
-                basket_items = [
-                {
-                    "id": "bakiye"+str(price),
-                    "price": str(price),
-                    "name": "bakiye"+str(price),
-                    "category1": "bakiye",
-                    "itemType": "VIRTUAL"
-                }
-                ]
-                break
+            basket_items = [
+            {
+                "id": "bakiye"+str(price*i.discount_percentage),
+                "price": str(price*i.discount_percentage),
+                "name": "bakiye"+str(price*i.discount_percentage),
+                "category1": "bakiye",
+                "itemType": "VIRTUAL"
+            }
+            ]
             break
         break
+            
 
     request = {
         'locale': 'tr',
@@ -906,21 +966,20 @@ def iyzipay(request):
             return response_400('this usern does not added price')
         balance_obj.price += price
         balance_obj.save()
-        campaigns_obj=addingBalanceCampaigns.objects.filter(is_active=True).order_by('-amount_money')
+        campaigns_obj=addingBalanceCampaigns.objects.filter(is_active=True,discount_percentage=False).order_by('-amount_money')
         if len(campaigns_obj)==0:
             return response_200(None)
         for i in campaigns_obj:
             if i.amount_money <= price:
-                if i.is_have_discount==False:
-                    balance_obj.price += i.gift_price
-                    balance_obj.save()
-                    BalanceHistory.objects.create(
-                        user=request.user,
-                        is_gift=True,
-                        is_adding_balance=True,
-                        balance=i.gift_price,
-                    )
-                    return response_200(None)
+                balance_obj.price += i.gift_price
+                balance_obj.save()
+                BalanceHistory.objects.create(
+                    user=request.user,
+                    is_gift=True,
+                    is_adding_balance=True,
+                    balance=i.gift_price,
+                )
+                return response_200(None)
     return response_400(payment_json["status"])
 
 
@@ -1125,4 +1184,56 @@ def play_game(request,qr_code):
         else:
             return response_400('this machine has an error')
     
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_gifts(request):
+    if not is_verified(request.user.tel_no):
+        return response_400('this user does not valid')
+    try:
+        jeton_obj=Jeton.objects.get(user=request.user)
+    except ObjectDoesNotExist as e:
+        return response_400('this user has not jeton')
+    gift_obj=Gift.objects.all().order_by('jeton_amount_of_gifts')
+    list=[]
+    for i in gift_obj:
+        is_money_enough=True
+        if jeton_obj.amount < gift_obj.jeton_amount_of_gifts:
+            is_money_enough=False
+        return_obj={
+            "id":i.id,
+            "gift_name":i.gift_name,
+            "gift_description1":i.gift_description1,
+            "gift_description2":i.gift_description2,
+            "gift_description3":i.gift_description3,
+            "number_of_gifts":i.number_of_gifts,
+            "jeton_amount_of_gifts":i.jeton_amount_of_gifts,
+            "created_at":localtime(i.created_at),
+            "updated_at":localtime(i.updated_at),
+            "is_money_enough":is_money_enough
+        } 
+        list.append(return_obj)
+    return response_200(list)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def gift_delivery_address_check(request):
+    if not is_verified(request.user.tel_no):
+        return response_400('this user does not valid')
+    delivery_of_person=request.data.get('delivery_of_person')
+    address=request.data.get('address')
+    try:
+        gift_obj=GiftDetails.objects.get(delivery_of_person=delivery_of_person,address=address)
+    except ObjectDoesNotExist as e:
+        return response_400("this user's information is wrong")
+    GiftDetails.objects.create(
+        delivery_of_person=delivery_of_person,
+        address=address
+    )
+    return response_200('success')
+
+
+
+
 

@@ -129,7 +129,7 @@ class Jeton(models.Model):
         return str(self.user)
 
 class JetonHistory(models.Model):
-    user=models.ForeignKey(Jeton,on_delete=models.CASCADE)
+    user=models.ForeignKey(CustomUser,on_delete=models.CASCADE)
     jeton_amount=models.FloatField(blank=False)
     is_added_jeton=models.BooleanField(default=False)
     created_at=models.DateTimeField(auto_now_add=True)
@@ -215,4 +215,27 @@ class OTPGetChild(models.Model):
     def __str__(self):
         return str(self.phone)
 
+class Gift(models.Model):
+    gift_name=models.CharField(blank=False,max_length=100)
+    gift_description1=models.CharField(blank=False,max_length=100)
+    gift_description2=models.CharField(blank=False,max_length=100)
+    gift_description3=models.CharField(blank=False,max_length=100)
+    is_gift_added=models.BooleanField(default=False)
+    number_of_gifts=models.IntegerField(blank=False)
+    jeton_amount_of_gifts=models.FloatField(blank=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
+    def __str__(self):
+        return str(self.gift_name)
+
+class GiftDetails(models.Model):
+    delivery_of_person=models.ForeignKey(CustomUser,on_delete=models.CASCADE)
+    address=models.CharField(blank=False,max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+    update_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return str(self.address)
+
+    

@@ -18,6 +18,7 @@ class Company(models.Model):
         return self.name
 
 
+
 def get_news_image_filepath(self, filename):
     return f'news/images/{self.pk}/{"news_image.png"}'
 def get_default_news_image():
