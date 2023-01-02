@@ -59,6 +59,7 @@ class CustomUser(AbstractBaseUser):
     def has_module_perms(self, app_label):
         return True
 
+
 class OTPRegister(models.Model):
     tel_no = models.CharField(blank=False, max_length=100)
     otp = models.CharField(blank=False, max_length=100)
@@ -70,6 +71,7 @@ class OTPRegister(models.Model):
     def __str__(self):
         return str(self.tel_no)
 
+
 class OTPChange(models.Model):
     user=models.ForeignKey(CustomUser,on_delete=models.CASCADE)
     phone = models.CharField(blank=False, max_length=100)
@@ -77,7 +79,7 @@ class OTPChange(models.Model):
     description = models.CharField(blank=False, max_length=100)
     is_verified = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
-    update_at = models.DateTimeField(auto_now=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return str(self.user)
@@ -139,7 +141,7 @@ class JetonHistory(models.Model):
         return str(self.user)
 
 class JetonConverisonHistory(models.Model):
-    user=models.ForeignKey(Jeton,on_delete=models.CASCADE)
+    user=models.ForeignKey(CustomUser,on_delete=models.CASCADE)
     amount=models.FloatField(blank=False)
     is_conversion_jeton=models.BooleanField(default=False)
     created_at=models.DateTimeField(auto_now_add=True)
@@ -179,7 +181,7 @@ class Family(models.Model):
         max_length=100, upload_to=get_profile_image_filepath,default=get_default_profile_image)
     phone = models.CharField(blank=True, null=True, max_length=20)
     created_at = models.DateTimeField(auto_now_add=True)
-    update_at = models.DateTimeField(auto_now=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return str(self.parent)
@@ -197,7 +199,7 @@ class Game(models.Model):
     branch=models.CharField(blank=True,max_length=100,null=True)
     game_name=models.CharField(blank=True,null=True,max_length=100)
     created_at = models.DateTimeField(auto_now_add=True)
-    update_at = models.DateTimeField(auto_now=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return str(self.user)
@@ -210,7 +212,7 @@ class OTPGetChild(models.Model):
     description = models.CharField(blank=False, max_length=100)
     is_verified = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
-    update_at = models.DateTimeField(auto_now=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return str(self.phone)
@@ -233,7 +235,7 @@ class GiftDetails(models.Model):
     delivery_of_person=models.ForeignKey(CustomUser,on_delete=models.CASCADE)
     address=models.CharField(blank=False,max_length=100)
     created_at = models.DateTimeField(auto_now_add=True)
-    update_at = models.DateTimeField(auto_now=True)
+    updated_at = models.DateTimeField(auto_now=True)
     
     def __str__(self):
         return str(self.address)

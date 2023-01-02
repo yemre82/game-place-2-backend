@@ -465,7 +465,7 @@ def jeton_conversion(request):
     except ObjectDoesNotExist as e:
         return response_400('there is not exist jeton conversion')
     amount=request.data.get('amount')
-    if not float(amount_obj.min_amount) < float(amount):
+    if not amount_obj.min_amount < amount:
         return response_400('your amount must greater than min_amount')
     if jeton_obj.amount < amount:
         return response_400("the balance is not enough")
@@ -475,7 +475,7 @@ def jeton_conversion(request):
         balance_obj=Balance.objects.get(user=request.user)
     except ObjectDoesNotExist as e:
         balance_obj=Balance.objects.create(user=request.user)
-    balance_obj.price += float((amount)/amount_obj.tl_to_jeton)
+    balance_obj.price += (amount)/amount_obj.tl_to_jeton
     balance_obj.price.save()
     return response_200('success')
 
@@ -489,13 +489,13 @@ def get_jeton_conversion_history(request,ended):
     history_obj=[]
     for i in jeton_obj:
         return_obj={
-            "user": i.user.firstname+" "+i.user.lastname,
+            "user": i.user.name+" "+i.user.surname,
             "amount":i.amount,
             "conversion_jeton":i.is_conversion_jeton,
             "created_at":localtime(i.created_at),
             "updated_at":localtime(i.updated_at)
         }
-    history_obj.append(return_obj)
+        history_obj.append(return_obj)
     return response_200(history_obj)
 
 
