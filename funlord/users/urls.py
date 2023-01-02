@@ -1,5 +1,6 @@
 from django.urls import path
-from users.views import game_info, get_all_branchs, get_all_news, get_balance, get_balance_history, get_branch, get_jeton_conversion_history, get_jeton_history,get_news, get_or_create_jeton, jeton_conversion,create_otp,register,login,forgot_password,forgot_password_verification,change_password, verify_otp
+from funlord.users.views import add_child_family_member, add_or_edit_email, change_birthday, change_name_surname, change_password_in_application, change_phone, change_phone_verification, delete_member_from_family, edit_member_from_family, extend_child_in_game, get_child_from_game, get_child_in_game, get_family, get_gifts, gift_delivery_address_check, is_email_valid, play_game
+from users.views import game_info, get_all_branchs, get_all_news, get_balance, get_balance_history, get_branch, get_jeton_conversion_history, get_jeton_history,get_news, get_or_create_jeton, jeton_conversion,create_otp,register,login,forgot_password,forgot_password_verification,change_password, verify_otp,get_profile,iyzipay
 
 urlpatterns= [
     path("create-otp",create_otp),
@@ -19,5 +20,24 @@ urlpatterns= [
     path('get-jeton-history/<int:ended>',get_jeton_history),
     path('jeton-conversion',jeton_conversion),
     path('get-jeton-conversion-history/<int:ended>',get_jeton_conversion_history),
-    path('game-info/<str:qr_code>',game_info)
+    path('get-profile',get_profile),
+    path('get-family',get_family),
+    path('add-child-family-member',add_child_family_member),
+    path('delete-member-from-family',delete_member_from_family),
+    path('edit-member-from-family',edit_member_from_family),
+    path('change-name-surname',change_name_surname),
+    path('change-birthday',change_birthday),
+    path('change-phone',change_phone),
+    path('change-phone-verification',change_phone_verification),
+    path('change-password-in-application',change_password_in_application),
+    path('get-child-in-game',get_child_in_game),
+    path('get-child-from-game',get_child_from_game),
+    path('extend-child-in-game',extend_child_in_game),
+    path('is-email-valid',is_email_valid),
+    path('add-or-edit-email',add_or_edit_email),
+    path('iyzipay',iyzipay),
+    path('game-info/<str:qr_code>',game_info),
+    path('play_game/<str:qr_code>',play_game),
+    path('get-gifts',get_gifts),
+    path('gift-delivery-address-check',gift_delivery_address_check)  
 ]
