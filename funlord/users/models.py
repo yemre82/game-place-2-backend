@@ -32,7 +32,7 @@ class CustomUser(AbstractBaseUser):
     username = models.CharField(blank=True, max_length=100, unique=True)
     email = models.EmailField(blank=True, null=True, unique=True)
     birthday = models.DateField(blank=True, null=True)
-    tel_no = models.IntegerField(blank=False, null=True )
+    tel_no = models.CharField(blank=False, max_length=100, unique=True)
     country = models.CharField(blank=True, null=True, max_length=100)
     created_at = models.DateTimeField(
         verbose_name="created at", auto_now_add=True)
@@ -74,7 +74,7 @@ class OTPRegister(models.Model):
 
 class OTPChange(models.Model):
     user=models.ForeignKey(CustomUser,on_delete=models.CASCADE)
-    phone = models.CharField(blank=False, max_length=100)
+    phone = models.CharField(blank=False, max_length=100,null=True)
     otp = models.CharField(blank=False, max_length=10)
     description = models.CharField(blank=False, max_length=100)
     is_verified = models.BooleanField(default=False)
@@ -234,6 +234,8 @@ class Gift(models.Model):
 class GiftDetails(models.Model):
     delivery_of_person=models.ForeignKey(CustomUser,on_delete=models.CASCADE)
     address=models.CharField(blank=False,max_length=100)
+    gift= models.ForeignKey(Gift,on_delete=models.CASCADE)
+    jeton_amount_of_gifts=models.FloatField(blank=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     

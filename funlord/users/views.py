@@ -2,6 +2,7 @@ from django.utils.timezone import localtime
 import requests
 import iyzipay
 import json
+from personel.models import ChildsOfGames
 from django.shortcuts import render
 from datetime import datetime, timedelta
 from urllib.request import Request
@@ -18,10 +19,10 @@ from superuser.models import Branchs, ChildOfGames, News,Company, addingBalanceC
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def create_otp(request):
-    now_2_min = datetime.now() - timedelta(minutes=2)
+    now_1_min = datetime.now() - timedelta(minutes=1)
     tel_no=request.data.get('tel_no')
     try:
-        user_obj=OTPRegister.objects.get(tel_no=tel_no,created_at__lt=now_2_min)
+        user_obj=OTPRegister.objects.get(tel_no=tel_no,created_at__gt=now_1_min)
         return response_400("The user is already obtained")
     except ObjectDoesNotExist as e:
         otp = generate_random_num()
@@ -53,11 +54,13 @@ def register(request):
     if not register_parameters(request.data):
         return response_400('your informations are not enough')
     tel_no=request.data.get('tel_no')
+    if not is_verified(tel_no):
+        return response_400('this user does not valid')
     name=request.data.get('name')
     surname=request.data.get('surname')
     birthday = datetime.strptime(request.data.get("birthday"), "%Y-%m-%d")
     gender=request.data.get('gender')
-    member_id=request.data.get('member_id')
+    member_id=generate_sha256_for_user(tel_no,datetime.now())
     try:
         user_obj=CustomUser.objects.get(tel_no=tel_no)
         return response_400('this user is already obtained')
@@ -78,14 +81,16 @@ def register(request):
             birthday=birthday,
             tel_no=tel_no,
             gender=gender,
-            member_id=generate_sha256_for_user(tel_no,datetime.now())
+            member_id=member_id,
+            username=tel_no,
+            qr_code=member_id
         )
         return_obj.set_password(password)
         return_obj.save()
         Balance.objects.create(
             user=return_obj  
         )
-        if gender=="erkek":
+        if gender=="male":
             is_male=True
         else:
             is_male=False
@@ -186,7 +191,7 @@ def change_password(request):
 
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def get_all_news(request,filtering):
     liste=[]
     if filtering == 'all':
@@ -241,7 +246,7 @@ def get_news(request,news_id):
 
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def get_all_branchs(request,filtering):
     liste=[]
     if filtering=='all':
@@ -422,7 +427,7 @@ def get_or_create_jeton(request):
     try:
         jeton_obj=Jeton.objects.get(user=request.user)
     except ObjectDoesNotExist as e:
-        user_obj=Jeton.objects.create(
+        jeton_obj=Jeton.objects.create(
             user=request.user,
         )
     return_obj = {
@@ -471,12 +476,19 @@ def jeton_conversion(request):
         return response_400("the balance is not enough")
     jeton_obj.amount -= amount 
     jeton_obj.save()
+    jeton_obj.total += amount
+    jeton_obj.save()
     try:
         balance_obj=Balance.objects.get(user=request.user)
     except ObjectDoesNotExist as e:
         balance_obj=Balance.objects.create(user=request.user)
     balance_obj.price += (amount)/amount_obj.tl_to_jeton
-    balance_obj.price.save()
+    balance_obj.save()
+    JetonConverisonHistory.objects.create(
+        user=request.user,
+        amount=amount,
+        is_conversion_jeton=True
+    )
     return response_200('success')
 
 
@@ -556,6 +568,8 @@ def add_child_family_member(request):
     else:
         is_male=False
     profile_image=request.data.get("profile_image")
+    if profile_image==None or profile_image=="":
+        return response_400("child must have a photo")
     Family.objects.create(
         parent=request.user,
         firstname=name,
@@ -603,18 +617,16 @@ def edit_member_from_family(request):
     lastname = request.data.get("lastname")
     birthday = datetime.strptime(request.data.get("birthday"), "%Y-%m-%d")
     is_male = request.data.get("is_male")
-    phone=request.data.get("phone")
-    is_parent=False
-    if len(phone)==0:
-        is_parent=True
+    profile_image=request.data.get("profile_image")
+    if profile_image==None or profile_image=="":
+        return response_400("child must have a photo")
     family_obj.firstname=firstname
     family_obj.lastname=lastname
     family_obj.birthday=birthday
     family_obj.is_male=is_male
-    family_obj.phone=phone
-    family_obj.is_parent=is_parent
+    family_obj.profile_image=profile_image
     family_obj.save()
-    return response_200("success",None)
+    return response_200("success")
 
 
 @api_view(['POST'])
@@ -650,9 +662,9 @@ def change_birthday(request):
     try:
         family_obj=Family.objects.get(
             parent=request.user,
-            firstname=request.user.firstname,
-            lastname=request.user.lastname,
-            phone=request.user.phone
+            firstname=request.user.name,
+            lastname=request.user.surname,
+            phone=request.user.tel_no
         )
     except ObjectDoesNotExist as e:
         return response_400("family object is not valid")
@@ -677,7 +689,7 @@ def change_phone(request):
         user=request.user,
         phone=tel_no,
         otp=otp,
-        description=description
+        description=description,
     )
     return response_200("success")
 
@@ -689,7 +701,7 @@ def change_phone_verification(request):
         return response_400('this user does not valid')
     change_phone_obj=OTPChange.objects.filter(user=request.user,is_verified=False).order_by("-id")
     otp=request.data.get("otp")
-    if len(change_phone)==0:
+    if len(otp)==0:
         return response_400("there is no such otp")
     for i in change_phone_obj:
         if i.otp!=otp:
@@ -697,13 +709,14 @@ def change_phone_verification(request):
         try:
             family_obj=Family.objects.get(
                 parent=request.user,
-                firstname=request.user.firstname,
-                lastname=request.user.lastname,
-                phone=request.user.phone
+                firstname=request.user.name,
+                lastname=request.user.surname,
+                phone=request.user.tel_no
             )
         except ObjectDoesNotExist as e:
             return response_400("family object is not valid")
-        request.user.phone=i.phone
+        request.user.tel_no=i.phone
+        request.user.username=i.phone
         request.user.save()
         family_obj.phone=i.phone
         family_obj.save()
@@ -730,7 +743,7 @@ def change_password_in_application(request):
     if len(password) < 8:
         return response_400("your password digits number must be at least 8")
     if password != password_a:
-        return response_400("Gönderdiğiniz şifreler birbirleri ile aynı değiller.")
+        return response_400("these passwords are not same")
     request.user.set_password(password)
     request.user.save()
     return response_200("success")
@@ -750,21 +763,21 @@ def get_child_in_game(request):
         one_ticket_price=(i.price)/how_much_ticket_played
         return_obj={
             "game_id":i.id,
-            "user":i.user.firstname + " "+ i.user.lastname,
+            "user":i.user.name + " "+ i.user.surname,
             "gamer":i.gamer.firstname+ " "+ i.gamer.lastname,
             "gamer_id":i.gamer.id,
             "price":one_ticket_price,
             "started_at":localtime(i.started_at),
             "ended_at":localtime(i.ended_at),
             "created_at":localtime(i.created_at),
-            "update_at":localtime(i.update_at),
+            "updated_at":localtime(i.updated_at),
             "remaining_time":remaining_time_ts,
             "city":i.city,
             "branch":i.branch,
             "game_name":i.game_name
         }
         returning_list.append(return_obj)
-    return response_200("success",returning_list)
+    return response_200(returning_list)
 
 
 
@@ -774,7 +787,7 @@ def get_child_from_game(request):
     if not is_verified(request.user.tel_no):
         return response_400('this user does not valid')
     this_time=datetime.now()
-    game_obj=Game.objects.filter(user=request.user,started_at__gl=this_time,ended_at__gt=this_time).order_by("-id")
+    game_obj=Game.objects.filter(user=request.user,started_at__gt=this_time,ended_at__gt=this_time).order_by("-id")
     if len(game_obj)==0:
         return response_400("the user has no child in game")
     game_id=request.data.get("game_id")
@@ -804,7 +817,7 @@ def extend_child_in_game(request):
         return response_400("the user has no child in game")
     game_id=request.data.get("game_id")
     try:
-        game_obj=ChildOfGames.objects.get(user=request.user,started_at__lt=this_time,ended_at__gt=this_time,id=game_id,is_finished=False)
+        game_obj=ChildOfGames.objects.get(parent_name=request.user.name,started_at__lt=this_time,ended_at__gt=this_time,id=game_id,is_finished=False)
     except ObjectDoesNotExist as e:
         return response_400("there is no such game")
     how_much_ticket_played=(datetime.timestamp(game_obj.ended_at)-datetime.timestamp(game_obj.started_at))/1800
@@ -836,7 +849,7 @@ def is_email_valid(request):
         return response_400('this user does not valid')
     if request.user.email=="" or request.user.email==None:
         return response_400("email girilmemiş")
-    return response_200("success",str(request.user.email))
+    return response_200(str(request.user.email))
 
 
 @api_view(['POST'])
@@ -847,12 +860,12 @@ def add_or_edit_email(request):
     email=request.data.get("email")
     request.user.email=email
     request.user.save()
-    return response_200("success",None)
+    return response_200("success")
 
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def iyzipay(request):
+def iyzipay_income(request):
     x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
     if x_forwarded_for:
         ip = x_forwarded_for.split(',')[0]
@@ -868,6 +881,8 @@ def iyzipay(request):
     expireYear=request.data.get('expireYear')
     cvc=request.data.get('cvc')
     price=request.data.get('price')
+    if request.user.email==None:
+        return response_400("user must have a email")
     payment_card = {
         'cardHolderName':request.user.name+' '+ request.user.surname,
         'cardNumber': cardNumber,
@@ -935,7 +950,7 @@ def iyzipay(request):
         break
             
 
-    request = {
+    request2 = {
         'locale': 'tr',
         'conversationId':"bakiye"+str(price), 
         'price': str(price),
@@ -951,7 +966,7 @@ def iyzipay(request):
         'billingAddress': address,
         'basketItems': basket_items
     }
-    payment = iyzipay.Payment().create(request, options)
+    payment = iyzipay.Payment().create(request2, options)
     payment_json=json.loads(payment.read())
     if payment_json["status"]=='success':
         BalanceHistory.objects.create(
@@ -1008,7 +1023,7 @@ def game_info(request,qr_code):
     is_money_enough=True
     if response_obj["machineType"]=="SOFT PLAY2":
         for_child=True
-    if balance_obj.balance<response_obj["price"]:
+    if balance_obj.price<response_obj["price"]:
         is_money_enough=False
     if response_obj["price"]==0:
         return response_400("this machine for personels")
@@ -1019,7 +1034,7 @@ def game_info(request,qr_code):
         "price":response_obj["price"],
         "for_child":for_child,
         "is_money_enough":is_money_enough,
-        "your_price":balance_obj.balance,
+        "your_price":balance_obj.price,
         "machine_store": response_obj["machineStore"]
     }
     return response_200(return_obj)
@@ -1218,15 +1233,11 @@ def get_gifts(request):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def gift_delivery_address_check(request):
+def gift_delivery_address(request):
     if not is_verified(request.user.tel_no):
         return response_400('this user does not valid')
     delivery_of_person=request.data.get('delivery_of_person')
     address=request.data.get('address')
-    try:
-        gift_obj=GiftDetails.objects.get(delivery_of_person=delivery_of_person,address=address)
-    except ObjectDoesNotExist as e:
-        return response_400("this user's information is wrong")
     GiftDetails.objects.create(
         delivery_of_person=delivery_of_person,
         address=address
