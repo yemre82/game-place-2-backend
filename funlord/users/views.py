@@ -2,7 +2,6 @@ from django.utils.timezone import localtime
 import requests
 import iyzipay
 import json
-from personel.models import ChildsOfGames
 from django.shortcuts import render
 from datetime import datetime, timedelta
 from urllib.request import Request
@@ -1243,6 +1242,82 @@ def gift_delivery_address(request):
         address=address
     )
     return response_200('success')
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def play_and_win(request):
+    if not is_verified(request.user.tel_no):
+        return response_400('this user does not valid')
+    try:
+        jeton_obj=Jeton.objects.get(user=request.user)
+    except ObjectDoesNotExist as e:
+        jeton_obj=Jeton.objects.create(
+            user=request.user,
+        )
+    try:
+        min_amount_obj=Min_Withdrawal_Amount.objects.get(id=1)
+    except ObjectDoesNotExist as e:
+        return response_400('there is not exist jeton conversion')
+    tl= jeton_obj.amount / min_amount_obj.tl_to_jeton
+    return_obj={
+        "tl":tl,
+        "amount":jeton_obj.amount,
+        "total":jeton_obj.total
+    }
+    return response_200(return_obj)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def get_all_companies(request,filtering):
+    liste=[]
+    if filtering=='all':
+        comp_obj=Company.objects.all().order_by('-id')
+    else:
+        comp_obj=Company.objects.filter(name=filtering).order_by('-id')
+    for comp in comp_obj:
+        company_obj=Company.objects.filter(company=comp)
+        for i in company_obj:
+            return_obj={
+                "id":i.id,
+                "image":i.image,
+                "created_at":i.created_at,
+                "update_at":i.update_at
+            }
+            liste.append(return_obj)
+    return response_200(liste)
+    
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_company(request,branch_id):
+    if not is_verified(request.user.tel_no):
+        return response_400('this user does not valid')
+    try:
+        otp_obj=OTPRegister.objects.get(tel_no=request.user.tel_no,is_verified=True)
+    except ObjectDoesNotExist as e:
+        return response_400('there is no such user')
+    try:
+        company_obj=Company.objects.get(id=branch_id)
+    except ObjectDoesNotExist as e:
+        return response_400('there is no such branch')
+    return_obj={
+        "id":company_obj.id,
+        "name":company_obj.name,
+        "image":company_obj.image,
+        "created_at":company_obj.created_at
+    }
+    return response_200(return_obj)
+
+
+
+
+
+
+
+
+
 
 
 
