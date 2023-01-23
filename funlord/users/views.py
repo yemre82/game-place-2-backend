@@ -25,7 +25,7 @@ def create_otp(request):
         return response_400("The user is already obtained")
     except ObjectDoesNotExist as e:
         otp = generate_random_num()
-        sendSMSVerification(otp,[tel_no])
+        # sendSMSVerification(otp,[tel_no])
         OTPRegister.objects.create(
             tel_no=tel_no,
             otp=otp,
@@ -1309,17 +1309,5 @@ def get_company(request,branch_id):
         "created_at":company_obj.created_at
     }
     return response_200(return_obj)
-
-
-
-
-
-
-
-
-
-
-
-
 
 

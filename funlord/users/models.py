@@ -43,6 +43,8 @@ class CustomUser(AbstractBaseUser):
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     is_personel = models.BooleanField(default=False)
+    is_can_write=models.BooleanField(default=False)
+    is_company=models.BooleanField(default=False)
     member_id = models.CharField(blank=False, max_length=10)
 
     objects = MyUserManager()
