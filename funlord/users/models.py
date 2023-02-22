@@ -1,6 +1,8 @@
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
 
+from superuser.models import Company
+
 class MyUserManager(BaseUserManager):
     def create_user(self,username, tel_no, password=None):
         if not tel_no:
@@ -104,7 +106,16 @@ class Balance(models.Model):
 
     def __str__(self):
         return str(self.user)
-    
+
+
+class FunPara(models.Model):
+    user=models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    company=models.ForeignKey(Company,on_delete=models.CASCADE)
+    price=models.FloatField(default=0)
+
+    def __str__(self):
+        return str(self.user)  
+
 
 class BalanceHistory(models.Model):
     user=models.ForeignKey(CustomUser, on_delete=models.CASCADE)
@@ -244,4 +255,3 @@ class GiftDetails(models.Model):
     def __str__(self):
         return str(self.address)
 
-    

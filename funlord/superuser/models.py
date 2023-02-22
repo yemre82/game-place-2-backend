@@ -47,7 +47,7 @@ class News(models.Model):
 
 class Branchs(models.Model):
     company = models.ForeignKey(Company, on_delete=models.CASCADE)
-    branch = models.CharField(blank=False, max_length=100)
+    branch_name = models.CharField(blank=False, max_length=100)
     city = models.CharField(blank=False, max_length=100)
     country = models.CharField(blank=False, max_length=100)
     maps_link = models.CharField(blank=True, null=True, max_length=100)

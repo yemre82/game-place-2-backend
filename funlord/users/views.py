@@ -4,13 +4,13 @@ import iyzipay
 import json
 from django.shortcuts import render
 from datetime import datetime, timedelta
-from urllib.request import Request
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.authtoken.models import Token
 from django.core.exceptions import ObjectDoesNotExist
+from company.models import FunparaPercentage, WithdrawalAmount
 from funlord.responses import response_200, response_400
-from users.models import Balance, BalanceHistory, CustomUser, Family, Game, Gift, GiftDetails, Jeton, JetonConverisonHistory, JetonHistory, Min_Withdrawal_Amount, OTPChange, OTPForgotPassword, OTPGetChild,OTPRegister
+from users.models import Balance, BalanceHistory, CustomUser, Family, FunPara, Game, Gift, GiftDetails, Jeton, JetonConverisonHistory, JetonHistory, Min_Withdrawal_Amount, OTPChange, OTPForgotPassword, OTPGetChild,OTPRegister
 from users.utils import generate_sha256, generate_sha256_for_transactionId, generate_sha256_for_user, is_verified, register_parameters,generate_random_num,is_password_match,password_is_valid, sendSMSVerification
 from superuser.models import Branchs, ChildOfGames, News,Company, addingBalanceCampaigns
 
@@ -204,7 +204,6 @@ def get_all_news(request,filtering):
     for news in news_obj:
         return_obj = {
             "id":news.id,
-            "company":news.company.name,
             "title": news.title,
             "short_description": news.short_description,
             "description": news.description,
@@ -1041,72 +1040,101 @@ def game_info(request,qr_code):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def play_game(request,qr_code):
+def play_game(request, qr_code):
     if not is_verified(request.user.tel_no):
         return response_400('there is no such user')
+    use_funpara=request.data.get('use_funpara')
     try:
-        jeton_obj=Jeton.objects.get(user=request.user)
-    except ObjectDoesNotExist as e:
-        jeton_obj=Jeton.objects.create(
-            user=request.user
-        )
-    try:
-        min_withdrawal_amount_obj=Min_Withdrawal_Amount.objects.get(id=1)
+        min_withdrawal_amount_obj = Min_Withdrawal_Amount.objects.get(id=1)
     except ObjectDoesNotExist as e:
         return response_400('min withdrawal amount does not get')
-    data={
-        'machineCode':str(qr_code),
-        'memberId':request.user.member_id,
-        'transactionId':generate_sha256_for_transactionId(request.user.tel_no,datetime.now()),
+    data = {
+        'machineCode': str(qr_code),
+        'memberId': request.user.member_id,
+        'transactionId': generate_sha256_for_transactionId(request.user.tel_no, datetime.now()),
     }
     headers = {"Content-Type": "application/json; charset=utf-8"}
-    response = requests.post('https://api.playland.sade.io/Device/GetPrice', headers=headers, json=data)
-    response_obj=response.json()
+    response = requests.post(
+        'https://api.playland.sade.io/Device/GetPrice', headers=headers, json=data)
+    response_obj = response.json()
     if response_obj["status"] == False:
         return response_400('this machine has an error')
     try:
-        balance_obj=Balance.objects.get(user=request.user)
+        company_obj=Company.objects.get(name='Playland')
     except ObjectDoesNotExist as e:
-        return response_400('this user has not any balance')
-    if balance_obj.price < response_obj["price"]:
-        return response_400('your balance is not enough')
-    if response_obj["machineType"] == "SOFT PLAY":
-        family_id=request.data.get('family_id')
+        return response_400('there is no such company')
+    if use_funpara:
         try:
-            family_obj=Family.objects.get(parent=request.user,id=family_id,is_parent=False)
+            funpara_obj=FunPara.objects.get(user=request.user,company=company_obj)
+        except ObjectDoesNotExist as e:
+            funpara_obj=FunPara.objects.create(
+                user=request.user,
+                company=company_obj
+            )
+        if funpara_obj.price < response_obj["price"]:
+            return response_400('your funpara is not enough')
+    else:
+        try:
+            balance_obj = Balance.objects.get(user=request.user)
+        except ObjectDoesNotExist as e:
+            balance_obj = Balance.objects.create(user=request.user,
+                                             tel_no=request.user.tel_no)
+        if balance_obj.price < response_obj["price"]:
+            return response_400('your balance is not enough')
+    now = datetime.timestamp(datetime.now())
+    if response_obj["machineType"] == "SOFT PLAY2":
+        family_id = request.data.get('family_id')
+        try:
+            family_obj = Family.objects.get(
+                parent=request.user, id=family_id, is_parent=False)
         except ObjectDoesNotExist as e:
             return response_400('this is not child')
-        now=datetime.timestamp(datetime.now())
-        child_timestamp=datetime.timestamp(family_obj.birthday)
-        if now - child_timestamp > 378432000:
+
+        # child_timestamp=datetime.timestamp(family_obj.birthday)
+        if datetime.now().year - family_obj.birthday.year > 12:
             return response_400("this child can't play this game")
-        price=balance_obj.price
-        if price >= 500:
-            price=499
-        data={
-            "machineCode":str(qr_code),
-            "memberId":request.user.member_id,
-            "transactionId":generate_sha256_for_transactionId(request.user.tel_no,datetime.now()),
+        if use_funpara:
+            price= funpara_obj.price
+            if price >= 500:
+                price = 499
+        else:
+            price = balance_obj.price
+            if price >= 500:
+                price = 499
+        data = {
+            "machineCode": str(qr_code),
+            "memberId": request.user.member_id,
+            "transactionId": generate_sha256_for_transactionId(request.user.tel_no, datetime.now()),
             "memberBalance": price
         }
-        response = requests.post('https://api.playland.sade.io/Device/StartGame', headers=headers, json=data)
-        response_obj2=response.json()
+        response = requests.post(
+            'https://api.playland.sade.io/Device/StartGame', headers=headers, json=data)
+        response_obj2 = response.json()
         if "20 dk" in response_obj["machineName"]:
-            adding_time=1200
+            adding_time = 1200
         elif "30 dk" in response_obj["machineName"]:
-            adding_time=1800
+            adding_time = 1800
         elif "45 dk" in response_obj["machineName"]:
-            adding_time=2700
+            adding_time = 2700
         elif "60 dk" in response_obj["machineName"]:
-            adding_time=3600
+            adding_time = 3600
         elif "90 dk" in response_obj["machineName"]:
-            adding_time=5400
+            adding_time = 5400
         elif "120 dk" in response_obj["machineName"]:
-            adding_time=7200
+            adding_time = 7200
         else:
-            return response_400("I don't get time of machine")
+            if response_obj["machineName"] == "MOBIL TEST":
+                adding_time = 7200
+            else:
+                return response_400("I don't get time of machine")
 
         if response_obj2["status"] == True:
+            if use_funpara:
+                funpara_obj.price -= response_obj["price"]
+                funpara_obj.save()
+            else:
+                balance_obj.price -= response_obj["price"]
+                balance_obj.save()
             Game.objects.create(
                 user=request.user,
                 gamer=family_obj,
@@ -1115,12 +1143,12 @@ def play_game(request,qr_code):
                 ended_at=datetime.fromtimestamp(now+adding_time),
                 branch=response_obj["machineStore"],
                 game_name=response_obj["machineName"],
-                company=response_obj["company"]
+                company="Playland"
             )
             BalanceHistory.objects.create(
                 user=request.user,
                 balance=response_obj["price"],
-                company=response_obj["company"],
+                company="Playland",
                 branch=response_obj["machineStore"],
                 game_name=response_obj["machineName"]
             )
@@ -1135,28 +1163,46 @@ def play_game(request,qr_code):
                 ended_at=datetime.fromtimestamp(now+adding_time),
                 branch=response_obj["machineStore"],
                 game_name=response_obj["machineName"],
-                company=response_obj["company"]
+                company="Playland"
             )
-            jeton_obj.amount += response_obj["price"] * min_withdrawal_amount_obj.percantage
-            jeton_obj.save()
-            JetonHistory.objects.create(
+            WithdrawalAmount.objects.create(
                 user=request.user,
-                jeton_amount=response_obj["price"] * min_withdrawal_amount_obj.percantage,
-                is_added_jeton=True
+                company=company_obj,
+                amount= response_obj["price"]
             )
             return response_200(None)
         else:
             return response_400('this machine has an error')
     else:
-        data={
-            "machineCode":str(qr_code),
-            "memberId":request.user.member_id,
-            "transactionId":generate_sha256_for_transactionId(request.user.tel_no,datetime.now()),
+        if use_funpara:
+            price= funpara_obj.price
+            if price >= 500:
+                price = 499
+        else:
+            price = balance_obj.price
+            if price >= 500:
+                price = 499
+        try:
+            family_obj = Family.objects.get(
+                parent=request.user, is_parent=True, phone=request.user.tel_no)
+        except ObjectDoesNotExist as e:
+            return response_400('this is not child')
+        data = {
+            "machineCode": str(qr_code),
+            "memberId": request.user.member_id,
+            "transactionId": generate_sha256_for_transactionId(request.user.tel_no, datetime.now()),
             "memberBalance": price
         }
-        response = requests.post('https://api.playland.sade.io/Device/StartGame', headers=headers, json=data)
-        response_obj3=response.json()
+        response = requests.post(
+            'https://api.playland.sade.io/Device/StartGame', headers=headers, json=data)
+        response_obj3 = response.json()
         if response_obj3["status"] == True:
+            if use_funpara:
+                funpara_obj.price -= response_obj["price"]
+                funpara_obj.save()
+            else:
+                balance_obj.price -= response_obj["price"]
+                balance_obj.save()
             Game.objects.create(
                 user=request.user,
                 gamer=family_obj,
@@ -1165,12 +1211,13 @@ def play_game(request,qr_code):
                 ended_at=None,
                 branch=response_obj["machineStore"],
                 game_name=response_obj["machineName"],
-                company=response_obj["company"]
+                company="Playland",
+                is_finished=True
             )
             BalanceHistory.objects.create(
                 user=request.user,
                 balance=response_obj["price"],
-                company=response_obj["company"],
+                company="Playland",
                 branch=response_obj["machineStore"],
                 game_name=response_obj["machineName"]
             )
@@ -1185,19 +1232,17 @@ def play_game(request,qr_code):
                 ended_at=None,
                 branch=response_obj["machineStore"],
                 game_name=response_obj["machineName"],
-                company=response_obj["company"]
+                company="Playland",
+                is_finished=True
             )
-            jeton_obj.amount += response_obj["price"] * min_withdrawal_amount_obj.percantage
-            jeton_obj.save()
-            JetonHistory.objects.create(
+            WithdrawalAmount.objects.create(
                 user=request.user,
-                jeton_amount=response_obj["price"] * min_withdrawal_amount_obj.percantage,
-                is_added_jeton=True
+                company=company_obj,
+                amount= response_obj["price"]
             )
             return response_200(None)
         else:
             return response_400('this machine has an error')
-    
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -1309,5 +1354,63 @@ def get_company(request,branch_id):
         "created_at":company_obj.created_at
     }
     return response_200(return_obj)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_funpara(request,filtering):
+    if not is_verified(request.user.tel_no):
+        return response_400('this user does not valid')
+    if filtering == 'all':
+        funpara_obj=FunPara.objects.filter(user=request.user)
+        my_price=0
+        if len(funpara_obj) == 0:
+            return_obj={
+                'user':i.user.tel_no,
+                'company':'all',
+                'price':my_price
+            }
+            return response_200(return_obj)
+        for i in funpara_obj:
+            my_price += i.price
+        return_obj={
+            'user':i.user.tel_no,
+            'company':'all',
+            'price':my_price
+        }
+        return response_200(return_obj)
+    else:
+        try:
+            comp_obj=Company.objects.get(name=filtering)
+        except ObjectDoesNotExist as e:
+            return response_400('there is no such company')
+        try:
+            my_funpara_obj=FunPara.objects.get(user=request.user,company=comp_obj)
+        except ObjectDoesNotExist as e:
+            my_funpara_obj=FunPara.objects.create(
+                user=request.user,
+                company=comp_obj
+            )
+        return_obj={
+            'user':my_funpara_obj.user.tel_no,
+            'company':my_funpara_obj.company.name,
+            'price':my_funpara_obj.price
+        }
+        return response_200(return_obj)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 

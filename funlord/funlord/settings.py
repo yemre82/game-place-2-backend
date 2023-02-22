@@ -43,7 +43,8 @@ INSTALLED_APPS = [
     'users',
     'corsheaders',
     'superuser',
-    'personel'
+    'personel',
+    'company'
 ]
 
 MIDDLEWARE = [
